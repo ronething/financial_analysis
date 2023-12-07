@@ -1,11 +1,10 @@
-import configparser
 import os
-import re
-import tkinter as tk
-from datetime import datetime
-from tkinter import filedialog
 
-import matplotlib.pyplot as plt
+os.environ["JAVA_HOME"] = "/opt/homebrew/opt/openjdk@11/libexec/openjdk.jdk/Contents/Home"
+import configparser
+import re
+from datetime import datetime
+
 import pandas as pd
 import tabula
 from openpyxl.utils import get_column_letter
@@ -207,13 +206,17 @@ def data_clean(df_list):
                     if column == 'new记账日期':
                         # 使用正则表达式匹配日期（yyyy-mm-dd 格式）
                         date_pattern = r'\d{4}-\d{2}-\d{2}'  # 匹配 yyyy-mm-dd 格式的日期
-                        dates = re.findall(date_pattern, df.iloc[idx22, 0])
+                        dates = re.findall(date_pattern, str(df.iloc[idx22, 0]))
+                        if len(dates) == 0:
+                            continue
                         df[column][idx22] = dates[0]
                         df.iloc[idx22, 0] = df.iloc[idx22, 0].replace(dates[0], '')
                     if column == 'new货币':
                         # 使用正则表达式匹配货币字符串
                         currency_pattern = r'[A-Z]{3}'  # 匹配三个大写字母作为货币代码
-                        currencies = re.findall(currency_pattern, df.iloc[idx22, 0])
+                        currencies = re.findall(currency_pattern, str(df.iloc[idx22, 0]))
+                        if len(currencies) == 0:
+                            continue
                         df[column][idx22] = currencies[0]
                         df.iloc[idx22, 0] = df.iloc[idx22, 0].replace(currencies[0], '')
             if column == '对手信息':
@@ -239,15 +242,19 @@ def data_clean(df_list):
     # 设置日期列为datetime类型
     df["记账日期"] = pd.to_datetime(df["记账日期"])
     # 设置金额和余额为整数（分 0.01元）
-    df["交易金额"] = (df["交易金额"].replace(",", "", regex=True).astype(float) * 100).astype(int)
-    df["联机余额"] = (df["联机余额"].replace(",", "", regex=True).astype(float) * 100).astype(int)
-    df["交易金额"] = pd.to_numeric(df["交易金额"])
-    df["联机余额"] = pd.to_numeric(df["联机余额"])
+    df["交易金额"] = df["交易金额"].replace(",", "", regex=True).replace("-", "", regex=True)
+    # df["联机余额"] = df["联机余额"].replace(",", "", regex=True)
+    del df["联机余额"]
+    # df["交易金额"] = pd.to_numeric(df["交易金额"])
+    # df["联机余额"] = pd.to_numeric(df["联机余额"])
     # 设置货币列为category类型
-    df["货币"] = df["货币"].astype("category")
+    del df["货币"]
+    # df["货币"] = df["货币"].astype("category")
     # 设置str
-    df["交易摘要"] = df["交易摘要"].astype("str")
-    df["对手信息"] = df["对手信息"].astype("category")
+    del df["交易摘要"]
+    # df["交易摘要"] = df["交易摘要"].astype("str")
+    df["备注"] = df["对手信息"].astype("category")
+    del df["对手信息"]
 
     return df
 
@@ -288,55 +295,6 @@ def format_number2k(value):
         return f"{value:.1f}"
 
 
-def to_pic(df):
-    # 按照 "对手信息" 列进行分类统计 "交易金额" 列的总和
-    data = df.groupby('对手信息', observed=True)['交易金额'].sum()
-    # 将交易金额从 int64 转换为浮点数并保留两位小数
-    result = (data / 100).astype('float').round(2)
-    # 排序并选择前30个数据
-    result = result.sort_values(ascending=False, key=abs).head(30)
-    # 设置中文字体（示例使用微软雅黑，请根据您的系统和字体选择适合的字体）
-    plt.rcParams['font.family'] = 'Microsoft YaHei'  # 使用微软雅黑
-    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示为方块的问题
-    plt.figure(figsize=(8, 4), dpi=500)
-    plt.xticks(rotation=-45, fontsize=4)
-    plt.yticks(rotation=45, fontsize=4)
-    plt.xlabel('对手信息')
-    plt.ylabel('交易金额')
-    plt.title('对手信息 - 交易金额 （金额前30）')
-
-    # 绘制柱状图
-    ax = result.plot(kind='bar')
-    # 在每个柱形上添加数据值
-    for i, v in enumerate(result):
-        # 调整数据值的位置，负数显示在图形下面
-        va = 'top' if v < 0 else 'bottom'
-        ax.text(i, v, format_number2k(v), ha='center', va=va, fontsize=4)
-    # 保存柱状图为图片文件，设置tight bbox
-
-    # plt.savefig(save_path + 'bar_chart.png', bbox_inches='tight')
-    plt.savefig(os.path.join(save_path, 'bar_chart.png'), bbox_inches='tight')
-
-
-def open_file():
-    print('请选择要打开的pdf文件：')
-    # 创建 tkinter 窗口
-    root = tk.Tk()
-    root.withdraw()  # 隐藏主窗口
-    # 打开文件对话框，等待用户选择文件
-    file_path = filedialog.askopenfilename()
-    # 检查用户是否选择了文件
-    if file_path:
-        print("文件路径是:", file_path)
-    elif file_path == '':
-        print("用户取消了文件选择")
-    else:
-        print("用户取消了文件选择")
-    # 关闭 tkinter 窗口
-    root.destroy()
-    return file_path
-
-
 def read_path():
     global save_path
     # 读取配置项
@@ -351,31 +309,21 @@ def read_path():
 
 
 if __name__ == '__main__':
-    # todo 更改版本号
-    print('欢迎使用招商银行pdf流水信息处理工具 v0.8.4')
-    print('https://github.com/youzhiran')
-    print('2668760098@qq.com')
-
     read_path()
 
-    pdf_file_path = open_file()
+    pdf_file_path = "/path/to/your/2023.pdf"
 
-    print('1/4 数据读取...')
+    print('1/3 数据读取...')
     df_list = by_tabula(pdf_file_path)
-    # df_list = by_page(pdf_file_path, 56)
 
     # 数据清洗
-    print('2/4 数据清洗...')
+    print('2/3 数据清洗...')
     df = data_clean(df_list)
 
-    print('3/4 制作图表...')
-    to_pic(df)
-
-    print('4/4 制作表格...')
+    print('3/3 制作表格...')
     to_xlsx(df)
 
     print('处理完成！')
     print('文件已存储在： ' + save_path)
 
     input("处理完成！！按任意键退出")
-

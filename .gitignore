@@ -1,6 +1,4 @@
-/venv
-/res-1
-/build
-/dist
-/output
-/files/package
+.idea
+output
+Pipfile
+
